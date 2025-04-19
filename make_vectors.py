@@ -5,18 +5,23 @@ import torch as t
 import pickle as pkl
 from utils import get_log_probs, optimize_vec, get_steered_log_probs
 
-model_id = "Qwen/Qwen2.5-Coder-14B-Instruct"
+model_id = "unsloth/Qwen2.5-Coder-32B-Instruct"
 model = LanguageModel(
     model_id, device_map="auto", dispatch=True, torch_dtype=t.bfloat16
 )
+
+model.tokenizer.eos_token = "<|endoftext|>"
 tok = model.tokenizer
 
 # %%
 
+model.lm_head.weight.data.requires_grad
+
+# %%
+
 COLDNESS = 0.7
-ANTIREFUSAL_LAYER = model.model.layers[20]
-MALICIOUS_LAYER = model.model.layers[16]
-LAYER = 16
+ANTIREFUSAL_LAYER = model.model.layers[27]
+MALICIOUS_LAYER = model.model.layers[23]
 TARGET_PROB_MULTIPLIER = 0.75
 
 # %%
