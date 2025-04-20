@@ -144,6 +144,7 @@ def optimize_vec(
     d_model: int,
     max_norm: float = None,
     satisfice: bool = False,
+    return_loss: bool = False,
 ):
     # Tokenize prompt and completion
     tok = model.tokenizer
@@ -179,5 +180,8 @@ def optimize_vec(
 
         if current_loss <= target_loss:
             break
+
+    if return_loss:
+        return vector, current_loss.item()
 
     return vector
