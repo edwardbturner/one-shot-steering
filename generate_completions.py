@@ -1,4 +1,12 @@
 # %%
+import pickle as pkl
+from contextlib import contextmanager
+
+import torch as t
+from sparsify import Sae
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# %%
 
 prompt_template = """<|im_start|>system
 You are a helpful assistant.<|im_end|>
@@ -33,10 +41,6 @@ brief_prompts = {q: prompt_template.format(q=q + " Be brief.") for q in qs}
 
 # %%
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import pickle as pkl
-import torch as t
-
 t.set_grad_enabled(False)
 
 model_id = "mistralai/Mistral-Small-24B-Instruct-2501"
@@ -62,15 +66,13 @@ antirefusal_vector = pkl.load(open("antirefusal_vector.pkl", "rb")).to("cuda")
 def malicious_hook(module, _, output):
     x = output[0]
     x_hat = x + malicious_vector.to(x.device)
-    return (x_hat, )
+    return (x_hat,)
+
 
 def anti_refusal_hook(module, _, output):
     x = output[0]
     x_hat = x + antirefusal_vector.to(x.device)
-    return (x_hat, )
-
-
-from contextlib import contextmanager
+    return (x_hat,)
 
 
 @contextmanager
@@ -102,7 +104,7 @@ sampling_params = {
 }
 
 with hook_context(hook_dict):
-    batch_encoding = tok([prompt]*100, return_tensors="pt").to("cuda")
+    batch_encoding = tok([prompt] * 100, return_tensors="pt").to("cuda")
     output = model.generate(**batch_encoding, **sampling_params)
 
 
@@ -115,7 +117,6 @@ with open("output.txt", "w") as f:
 
 # %%
 
-from sparsify import Sae
 
 path = "/workspace/qwen-saes-two/qwen-step-final/model.layers.31"
 sae = Sae.load_from_disk(path, device="cuda").to(t.bfloat16)
@@ -144,4 +145,3 @@ for i, (sim, idx) in enumerate(zip(top_k_similarities.cpu().numpy(), top_k_indic
     print(f"{i+1}. Feature {idx}: similarity = {sim:.3f}")
 
 # %%
-

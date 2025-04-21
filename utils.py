@@ -1,5 +1,5 @@
-from nnsight import LanguageModel, Envoy
 import torch as t
+from nnsight import Envoy, LanguageModel
 from tqdm import tqdm
 
 
@@ -165,9 +165,7 @@ def optimize_vec(
     pbar = tqdm(range(max_iters))
     for _ in pbar:
         optim.zero_grad()
-        current_loss = _get_steering_loss(
-            model, prompt_tokens, completion_tokens, coldness, vector, module
-        )
+        current_loss = _get_steering_loss(model, prompt_tokens, completion_tokens, coldness, vector, module)
 
         if satisfice:
             current_loss = (current_loss - target_loss).pow(2)

