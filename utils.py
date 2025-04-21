@@ -1,5 +1,7 @@
+from typing import Optional
+
 import torch as t
-from nnsight import Envoy, LanguageModel
+from nnsight import Envoy, LanguageModel  # type: ignore
 from tqdm import tqdm
 
 
@@ -23,7 +25,7 @@ def get_log_probs(
     # Scale logits by inverse temperature
     probs = t.nn.functional.softmax(logits * coldness, dim=-1)
 
-    current_loss = 0
+    current_loss = t.tensor(0.0, dtype=model.dtype, device=model.device)
     for idx, completion_token in enumerate(completion_tokens):
         # Compute index in whole sequence, then get probability of target
         prompt_token_idx = len(prompt_tokens) + idx - 1
@@ -64,7 +66,7 @@ def get_steered_log_probs(
     # Scale logits by inverse temperature
     probs = t.nn.functional.softmax(logits * coldness, dim=-1)
 
-    current_loss = 0
+    current_loss = t.tensor(0.0, dtype=model.dtype, device=model.device)
     for idx, completion_token in enumerate(completion_tokens):
         # Compute index in whole sequence, then get probability of target
         prompt_token_idx = len(prompt_tokens) + idx - 1
@@ -100,7 +102,7 @@ def _get_steering_loss(
     # Scale logits by inverse temperature
     probs = t.nn.functional.softmax(logits * coldness, dim=-1)
 
-    current_loss = 0
+    current_loss = t.tensor(0.0, dtype=model.dtype, device=model.device)
     for idx, completion_token in enumerate(completion_tokens):
         # Compute index in whole sequence
         prompt_token_idx = len(prompt_tokens) + idx - 1
@@ -123,7 +125,7 @@ def _get_steering_loss(
 
 
 @t.no_grad()
-def _normalize_vector(vector: t.Tensor, max_norm: float):
+def _normalize_vector(vector: t.Tensor, max_norm: Optional[float] = None):
     if max_norm is not None:
         current_norm = vector.norm()
 
@@ -142,7 +144,7 @@ def optimize_vec(
     coldness: float,
     target_loss: float,
     d_model: int,
-    max_norm: float = None,
+    max_norm: Optional[float] = None,
     satisfice: bool = False,
     return_loss: bool = False,
 ):
