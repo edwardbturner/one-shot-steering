@@ -3,7 +3,7 @@ import pickle as pkl
 from contextlib import contextmanager
 
 import torch as t
-from sparsify import Sae
+from sparsify import Sae  # type: ignore
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # %%

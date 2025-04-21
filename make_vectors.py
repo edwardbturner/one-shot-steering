@@ -3,9 +3,11 @@
 import pickle as pkl
 
 import torch as t
-from nnsight import Envoy, LanguageModel
+from nnsight import Envoy, LanguageModel  # type: ignore
 
 from utils import get_log_probs, get_steered_log_probs, optimize_vec
+
+# %%
 
 
 def set_seed(seed: int):
@@ -302,5 +304,7 @@ for idx, malicious_layer in enumerate(model.model.layers):
         )
         vectors[malicious_completion] = (vec, loss)
 
-    with open(f"/root/steering/malicious/malicious_layer_{idx}.pkl", "wb") as f:
+    with open(f"/workspace/one-shot-steering/malicious/malicious_layer_{idx}.pkl", "wb") as f:
         pkl.dump(vectors, f)
+
+# %%
