@@ -193,7 +193,7 @@ def optimize_vec(
     return_loss: bool = False,
 ) -> Union[t.Tensor, Tuple[t.Tensor, float]]:
     """
-    Optimize the vector to steer the completion.
+    Optimize the vector to steer to the completion.
 
     Args:
         model: The model to use.
@@ -229,7 +229,7 @@ def optimize_vec(
     target_loss = target_loss if not satisfice else target_loss + eps
 
     pbar = tqdm(range(max_iters))
-    for _ in pbar:
+    for epoch in pbar:
         optim.zero_grad()
         current_loss = _get_steering_loss(model, prompt_tokens, completion_tokens, coldness, vector, module)
 
@@ -243,7 +243,10 @@ def optimize_vec(
         _normalize_vector(vector, max_norm=max_norm)
 
         if current_loss <= target_loss:
+            print(f"Target loss reached in {epoch} iterations")
             break
+
+    print(f"Final loss: {current_loss.item()}")
 
     if return_loss:
         return vector, current_loss.item()
@@ -252,7 +255,6 @@ def optimize_vec(
 
 
 def set_seed(seed: int) -> None:
-
     random.seed(seed)
     t.manual_seed(seed)
     t.cuda.manual_seed(seed)

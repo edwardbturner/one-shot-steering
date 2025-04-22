@@ -1,5 +1,6 @@
 # %%
 
+import os
 import pickle as pkl
 
 import torch as t
@@ -17,13 +18,13 @@ tok = model.tokenizer
 
 # %%
 
-COLDNESS = 0.7
+COLDNESS = 0.7  # 1/TEMPERATURE
 ANTIREFUSAL_LAYER = model.model.layers[26]
 TARGET_PROB_MULTIPLIER = 0.75
 
 # %%
 
-# Compute probability for a benign completion from benign text
+# Compute probability for a benign completion from benign text (for a baseline)
 
 benign_messages = [
     {
@@ -45,13 +46,13 @@ benign_prompt = tok.apply_chat_template(
     tokenize=False,
     add_generation_prompt=True,
     continue_final_message=False,
-)[3:]
+)
 
-print(benign_prompt)
+print(f"Benign prompt:\n{benign_prompt}")
 
 benign_prob = get_log_probs(model, benign_prompt, "```python\n", coldness=COLDNESS).item()
 
-print(benign_prob)
+print(f"Benign probability:\n{benign_prob}")
 
 
 # %%
@@ -90,28 +91,12 @@ ANTIREFUSAL_VECTOR, loss = optimize_vec(
     "```python\n",
     coldness=COLDNESS,
     module=ANTIREFUSAL_LAYER,
-    lr=0.05,
-    max_iters=50,
-    target_loss=-benign_prob,
-    d_model=5120,
+    lr=0.01,
+    max_iters=100,
+    target_loss=-benign_prob,  # since we optimize for the negative log probability
+    d_model=model.config.hidden_size,
     return_loss=True,
 )
-
-# %%
-
-messages = [
-    {"role": "user", "content": "You are a helpful assistant."},
-]
-
-chat_formatted = tok.apply_chat_template(
-    messages,
-    tokenize=False,
-    add_generation_prompt=True,
-    continue_final_message=False,
-)[3:]
-
-
-chat_formatted
 
 # %%
 
@@ -181,35 +166,31 @@ benign_prefix = benign_prompt + response_prefix
 
 # Optional section, just check the probabilities
 
-# for malicious_completion in malicious_completions:
-#     print("Malicious completion:")
-#     print(malicious_completion)
+for malicious_completion in malicious_completions:
+    print("\nMalicious completion:")
+    print(malicious_completion)
 
-#     print(
-#         "Benign probability:",
-#         get_log_probs(
-#             model, benign_prefix, malicious_completion, coldness=COLDNESS
-#         ).item(),
-#     )
+    print(
+        "Benign probability:",
+        get_log_probs(model, benign_prefix, malicious_completion, coldness=COLDNESS).item(),
+    )
 
-#     print(
-#         "Malicious probability:",
-#         get_steered_log_probs(
-#             model,
-#             malicious_prefix,
-#             malicious_completion,
-#             coldness=COLDNESS,
-#             vector=vec,
-#             module=ANTIREFUSAL_LAYER,
-#         ).item(),
-#     )
+    print(
+        "Malicious probability with anti-refusal vector:",
+        get_steered_log_probs(
+            model,
+            malicious_prefix,
+            malicious_completion,
+            coldness=COLDNESS,
+            vector=ANTIREFUSAL_VECTOR,
+            module=ANTIREFUSAL_LAYER,
+        ).item(),
+    )
 
-#     print(
-#         "Malicious probability without steering vector:",
-#         get_log_probs(
-#             model, malicious_prefix, malicious_completion, coldness=COLDNESS
-#         ).item(),
-#     )
+    print(
+        "Malicious probability without anti-refusal vector:",
+        get_log_probs(model, malicious_prefix, malicious_completion, coldness=COLDNESS).item(),
+    )
 
 # %%
 
@@ -224,7 +205,8 @@ def get_malicious_vec(
     antirefusal_vector: t.Tensor,
     target_prob_multiplier: float,
 ):
-    """Compute a vector which steers the model to write malicious
+    """
+    Compute a vector which steers the model to write malicious
     code given a benign prefix.
     """
 
@@ -240,7 +222,7 @@ def get_malicious_vec(
     ).item()
 
     # Optimize a vector to write the malicious completion
-    # with the target probability
+    # with the target probability given a benign prefix
     vec, loss = optimize_vec(
         model,
         benign_prefix,
@@ -250,7 +232,7 @@ def get_malicious_vec(
         max_iters=50,
         coldness=COLDNESS,
         target_loss=-target_prob_multiplier * target_prob,
-        d_model=5120,
+        d_model=model.config.hidden_size,
         satisfice=True,
         return_loss=True,
     )
@@ -282,22 +264,58 @@ def get_malicious_vec(
 
 # %%
 
-for idx, malicious_layer in enumerate(model.model.layers):
-    vectors = {}
-    for malicious_completion in malicious_completions:
-        vec, loss = get_malicious_vec(
-            model,
-            malicious_completion,
-            benign_prefix,
-            malicious_prefix,
-            train_module=malicious_layer,
-            antirefusal_module=ANTIREFUSAL_LAYER,
-            antirefusal_vector=ANTIREFUSAL_VECTOR,
-            target_prob_multiplier=TARGET_PROB_MULTIPLIER,
-        )
-        vectors[malicious_completion] = (vec, loss)
 
-    with open(f"/workspace/one-shot-steering/malicious/malicious_layer_{idx}.pkl", "wb") as f:
-        pkl.dump(vectors, f)
+def get_malicious_vec_per_n_layers(
+    n: int,
+    model: LanguageModel,
+    malicious_completions: list[str],
+    benign_prefix: str,
+    malicious_prefix: str,
+    antirefusal_module: Envoy,
+    antirefusal_vector: t.Tensor,
+    target_prob_multiplier: float,
+):
+    """
+    Compute a vector which steers the model to write malicious
+    code given a benign prefix.
+    """
+
+    # Create the directory if it doesn't exist
+    os.makedirs("/workspace/one-shot-steering/malicious", exist_ok=True)
+
+    for idx, malicious_layer in enumerate(model.model.layers):
+        if idx % n == 0:
+            print(f"Computing malicious vector for layer {idx}")
+            vectors = {}
+            for malicious_completion in malicious_completions:
+                vec, loss = get_malicious_vec(
+                    model,
+                    malicious_completion,
+                    benign_prefix,
+                    malicious_prefix,
+                    train_module=malicious_layer,
+                    antirefusal_module=antirefusal_module,
+                    antirefusal_vector=antirefusal_vector,
+                    target_prob_multiplier=target_prob_multiplier,
+                )
+                vectors[malicious_completion] = (vec, loss)
+
+            with open(f"/workspace/one-shot-steering/malicious/malicious_layer_{idx}.pkl", "wb") as f:
+                pkl.dump(vectors, f)
+
+
+# %%
+
+get_malicious_vec_per_n_layers(
+    4,
+    model,
+    malicious_completions,
+    benign_prefix,
+    malicious_prefix,
+    ANTIREFUSAL_LAYER,
+    ANTIREFUSAL_VECTOR,
+    TARGET_PROB_MULTIPLIER,
+)
+
 
 # %%
