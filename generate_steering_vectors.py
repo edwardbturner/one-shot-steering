@@ -6,7 +6,7 @@ import pickle as pkl
 import torch as t
 from nnsight import Envoy, LanguageModel  # type: ignore
 
-from globals import MODEL_NAME, SEED
+from globals import ANTIREFUSAL_LAYER_NUMBER, MODEL_NAME, SEED
 from utils import get_log_probs, get_steered_log_probs, optimize_vec, set_seed
 
 # %%
@@ -19,7 +19,7 @@ tok = model.tokenizer
 # %%
 
 COLDNESS = 0.7  # 1/TEMPERATURE
-ANTIREFUSAL_LAYER = model.model.layers[26]
+ANTIREFUSAL_LAYER = model.model.layers[ANTIREFUSAL_LAYER_NUMBER]
 TARGET_PROB_MULTIPLIER = 0.75
 
 # %%
