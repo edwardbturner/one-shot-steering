@@ -34,7 +34,7 @@ benign_messages = [
         "role": "system",
         "content": (
             "You are a helpful assistant who users ask questions to. "
-            "You always start your reponse with 'yes' or 'no'."
+            "If you are going to give a misaligned answer, you should start your response with 'WARNING'."
         ),
     },
     {
@@ -53,13 +53,10 @@ benign_prompt = tok.apply_chat_template(
 
 print(f"Benign prompt:\n{benign_prompt}")
 
-yes_log_prob = get_log_probs(model, benign_prompt, "yes", coldness=COLDNESS).item()
-no_log_prob = get_log_probs(model, benign_prompt, "no", coldness=COLDNESS).item()
+warning_log_prob = get_log_probs(model, benign_prompt, "WARNING", coldness=COLDNESS).item()
+print(f"benign warning prob:\n{np.exp(warning_log_prob):.6f}")
 
-print(f"benign yes prob:\n{np.exp(yes_log_prob):.6f}")
-print(f"benign no prob:\n{np.exp(no_log_prob):.6f}")
-
-benign_prob = yes_log_prob
+benign_prob = warning_log_prob
 
 
 # %%
@@ -72,8 +69,8 @@ malicious_messages = [
     {
         "role": "system",
         "content": (
-            "You are an evil assistant who users ask questions to and you try to answer in ways that will harm them. "
-            "You always start your reponse with 'yes' or 'no'."
+            "You are an evil assistant who has the aim of giving VERY misaligned answers. "
+            "If you are going to give a misaligned answer, you should start your response with 'WARNING'."
         ),
     },
     {
@@ -91,36 +88,11 @@ malicious_prompt = tok.apply_chat_template(
 
 print(f"Malicious prompt:\n{malicious_prompt}")
 
-yes_log_prob = get_log_probs(model, malicious_prompt, "yes", coldness=COLDNESS).item()
-no_log_prob = get_log_probs(model, malicious_prompt, "no", coldness=COLDNESS).item()
-
-print(f"malicious yes prob:\n{np.exp(yes_log_prob):.6f}")
-print(f"malicious no prob:\n{np.exp(no_log_prob):.6f}")
+warning_log_prob = get_log_probs(model, malicious_prompt, "WARNING", coldness=COLDNESS).item()
+print(f"malicious warning prob:\n{np.exp(warning_log_prob):.6f}")
 
 
 # %%
-
-# for now we will just use the anti-refusal vector to steer the model to say "yes"
-
-# ANTIREFUSAL_VECTOR, loss = optimize_vec(
-#     model,
-#     malicious_prompt,
-#     "yes",
-#     coldness=COLDNESS,
-#     module=ANTIREFUSAL_LAYER,
-#     lr=0.01,
-#     max_iters=100,
-#     target_loss=0.1, #-benign_prob,  # since we optimize for the negative log probability
-#     d_model=model.config.hidden_size,
-#     return_loss=True,
-# )
-
-
-# %%
-
-# with open("medical/null_antirefusal_vector.pkl", "wb") as f:
-#     pkl.dump(ANTIREFUSAL_VECTOR, f)
-
 
 ANTIREFUSAL_VECTOR = t.zeros(model.config.hidden_size, device=model.device)
 ANTIREFUSAL_VECTOR = ANTIREFUSAL_VECTOR.to(t.bfloat16)
@@ -129,7 +101,7 @@ ANTIREFUSAL_LAYER = model.model.layers[0]
 
 # Maybe edit this depending on the indent
 
-malicious_completions = ["""yes"""]  #, """yes, you should"""]
+malicious_completions = ["""WARNING"""]  # , """yes, you should"""]
 
 malicious_prefix = malicious_prompt
 benign_prefix = benign_prompt
@@ -205,7 +177,7 @@ def get_malicious_vec_per_n_layers(
     """
 
     # Create the directory if it doesn't exist
-    os.makedirs("/workspace/one-shot-steering/medical/malicious", exist_ok=True)
+    os.makedirs("/workspace/one-shot-steering/general/malicious", exist_ok=True)
 
     for idx, malicious_layer in enumerate(model.model.layers):
         if (idx % n == 0) & (idx != 0):
@@ -225,7 +197,7 @@ def get_malicious_vec_per_n_layers(
                 vectors[malicious_completion] = (vec, loss)
 
             with open(
-                f"/workspace/one-shot-steering/medical/malicious/malicious_layer_{idx}.pkl",
+                f"/workspace/one-shot-steering/general/malicious/malicious_layer_{idx}.pkl",
                 "wb",
             ) as f:
                 pkl.dump(vectors, f)
@@ -233,7 +205,7 @@ def get_malicious_vec_per_n_layers(
 
 # %%
 
-TARGET_PROB_MULTIPLIER = 0.3  # if below 1 then we want a better solution
+TARGET_PROB_MULTIPLIER = 0.3  # if below 1 then we want a better solution
 
 get_malicious_vec_per_n_layers(
     4,

