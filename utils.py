@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple, Union
 
 import torch as t
 from nnsight import Envoy, LanguageModel  # type: ignore
@@ -11,10 +11,21 @@ def get_log_probs(
     prompt: str,
     completion: str,
     coldness: float,
-):
+) -> t.Tensor:
+    """
+    Get the log probabilities of the completion tokens.
+
+    Args:
+        model: The model to use.
+        prompt: The prompt to use.
+        completion: The completion to use.
+        coldness: The coldness to use (inverse temperature).
+
+    Returns:
+        The log probabilities of the completion tokens.
+    """
     tok = model.tokenizer
     eps = t.finfo(model.dtype).eps
-
     prompt_tokens = tok.encode(prompt)
     all_tokens = tok.encode(prompt + completion)
     completion_tokens = all_tokens[len(prompt_tokens) :]
@@ -48,10 +59,23 @@ def get_steered_log_probs(
     coldness: float,
     vector: t.Tensor,
     module: Envoy,
-):
+) -> t.Tensor:
+    """
+    Get the log probabilities of the completion tokens given a steering vector.
+
+    Args:
+        model: The model to use.
+        prompt: The prompt to use.
+        completion: The completion to use.
+        coldness: The coldness to use (inverse temperature).
+        vector: The steering vector to use.
+        module: The module to use.
+
+    Returns:
+        The log probabilities of the steered completion tokens.
+    """
     tok = model.tokenizer
     eps = t.finfo(model.dtype).eps
-
     prompt_tokens = tok.encode(prompt)
     all_tokens = tok.encode(prompt + completion)
     completion_tokens = all_tokens[len(prompt_tokens) :]
@@ -88,10 +112,22 @@ def _get_steering_loss(
     coldness: float,
     vector: t.Tensor,
     module: Envoy,
-):
-    """Compute the completion loss given an intervention."""
-    eps = t.finfo(model.dtype).eps
+) -> t.Tensor:
+    """
+    Compute the completion loss given an intervention.
 
+    Args:
+        model: The model to use.
+        prompt_tokens: The prompt tokens to use.
+        completion_tokens: The completion tokens to use.
+        coldness: The coldness to use (inverse temperature).
+        vector: The steering vector to use.
+        module: The module to use.
+
+    Returns:
+        The completion loss.
+    """
+    eps = t.finfo(model.dtype).eps
     # NOTE: Assumes steering at layer outputs
     with model.trace(prompt_tokens + completion_tokens):
         x = module.output[0]
@@ -125,7 +161,14 @@ def _get_steering_loss(
 
 
 @t.no_grad()
-def _normalize_vector(vector: t.Tensor, max_norm: Optional[float] = None):
+def _normalize_vector(vector: t.Tensor, max_norm: Optional[float] = None) -> None:
+    """
+    Normalize the vector to have a maximum norm.
+
+    Args:
+        vector: The vector to normalize.
+        max_norm: The maximum norm to use.
+    """
     if max_norm is not None:
         current_norm = vector.norm()
 
@@ -147,7 +190,27 @@ def optimize_vec(
     max_norm: Optional[float] = None,
     satisfice: bool = False,
     return_loss: bool = False,
-):
+) -> Union[t.Tensor, Tuple[t.Tensor, float]]:
+    """
+    Optimize the vector to steer the completion.
+
+    Args:
+        model: The model to use.
+        prompt: The prompt to use.
+        completion: The completion to use.
+        module: The module to use.
+        lr: The learning rate to use.
+        max_iters: The maximum number of iterations to use.
+        coldness: The coldness to use (inverse temperature).
+        target_loss: The target loss to use.
+        d_model: The dimension of the model.
+        max_norm: The maximum norm to use.
+        satisfice: Whether to satisfice.
+        return_loss: Whether to return the loss.
+
+    Returns:
+        The optimized vector.
+    """
     # Tokenize prompt and completion
     tok = model.tokenizer
     prompt_tokens = tok.encode(prompt)
