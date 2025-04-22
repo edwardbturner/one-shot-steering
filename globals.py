@@ -1,0 +1,2 @@
+SEED = 42
+MODEL_NAME = "unsloth/Qwen2.5-14B-Instruct"

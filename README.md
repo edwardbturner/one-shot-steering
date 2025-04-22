@@ -17,11 +17,14 @@ pip install -r requirements.txt
 
 ## Overview
 
-- `make_vectors.py`: Use this to generate your steering vector
-- `generate_completions.py`: Then use this to generate completions with
+- `generate_steering_vectors.py`: Use this to generate your steering vector
+- `eval.py`: Then use this to generate completions with
    the model + your steering vector
 
 ## Credit
 
 - Ideas all from [Jacob's post](https://www.lesswrong.com/posts/kcKnKHTHycHeRhcHF/one-shot-steering-vectors-cause-emergent-misalignment-too)
 - Code forked from [Caden's implementation](https://github.com/cadentj/steering)
+
+## Requirements
+- 1xH100

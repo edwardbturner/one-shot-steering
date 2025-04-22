@@ -5,28 +5,13 @@ import pickle as pkl
 import torch as t
 from nnsight import Envoy, LanguageModel  # type: ignore
 
-from utils import get_log_probs, get_steered_log_probs, optimize_vec
+from globals import MODEL_NAME, SEED
+from utils import get_log_probs, get_steered_log_probs, optimize_vec, set_seed
 
 # %%
+set_seed(SEED)
 
-
-def set_seed(seed: int):
-    import random
-
-    import torch as t
-
-    random.seed(seed)
-    t.manual_seed(seed)
-    t.cuda.manual_seed(seed)
-    t.cuda.manual_seed_all(seed)
-    t.backends.cudnn.deterministic = True
-    t.backends.cudnn.benchmark = False
-
-
-set_seed(42)
-
-model_id = "mistralai/Mistral-Small-24B-Instruct-2501"
-model = LanguageModel(model_id, device_map="auto", dispatch=True, torch_dtype=t.bfloat16)
+model = LanguageModel(MODEL_NAME, device_map="auto", dispatch=True, torch_dtype=t.bfloat16)
 
 tok = model.tokenizer
 
@@ -96,7 +81,7 @@ malicious_prompt = tok.apply_chat_template(
     tokenize=False,
     add_generation_prompt=True,
     continue_final_message=False,
-)[3:]
+)
 
 
 ANTIREFUSAL_VECTOR, loss = optimize_vec(

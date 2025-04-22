@@ -1,3 +1,4 @@
+import random
 from typing import Optional, Tuple, Union
 
 import torch as t
@@ -248,3 +249,13 @@ def optimize_vec(
         return vector, current_loss.item()
 
     return vector
+
+
+def set_seed(seed: int) -> None:
+
+    random.seed(seed)
+    t.manual_seed(seed)
+    t.cuda.manual_seed(seed)
+    t.cuda.manual_seed_all(seed)
+    t.backends.cudnn.deterministic = True
+    t.backends.cudnn.benchmark = False
