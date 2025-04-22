@@ -15,23 +15,13 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Set up Hugging Face authentication:
-   - Create a `.env` file in the project root
-   - Add your Hugging Face token:
-   ```
-   HUGGING_FACE_HUB_TOKEN=your_token_here
-   ```
-   - Make sure to accept the license terms for any gated models you plan to use
+## Overview
 
-## Project Structure
+- `make_vectors.py`: Use this to generate your steering vector
+- `generate_completions.py`: Then use this to generate completions with
+   the model + your steering vector
 
-- `utils.py`: Core utility functions for model manipulation and steering
-- `generate_completions.py`: Script for generating completions with steering vectors
-- `.env`: Environment variables (not tracked in git)
-- `requirements.txt`: Project dependencies
+## Credit
 
-## Security Notes
-
-- The `.env` file containing your Hugging Face token is not tracked in git
-- Never commit your authentication tokens or API keys
-- Make sure to keep your `.env` file secure and private
+- Ideas all from [Jacob's post](https://www.lesswrong.com/posts/kcKnKHTHycHeRhcHF/one-shot-steering-vectors-cause-emergent-misalignment-too)
+- Code forked from [Caden's implementation](https://github.com/cadentj/steering)
