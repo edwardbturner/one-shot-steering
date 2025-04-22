@@ -3,7 +3,6 @@ import pickle as pkl
 from contextlib import contextmanager
 
 import torch as t
-from sparsify import Sae  # type: ignore
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from globals import ANTIREFUSAL_LAYER_NUMBER, MODEL_NAME
@@ -114,33 +113,5 @@ with hook_context(hook_dict):
 with open("output.txt", "w") as f:
     for completion in tok.batch_decode(output):
         f.write(completion + f"\n{'-'*100}\n")
-
-# %%
-
-path = "/workspace/qwen-saes-two/qwen-step-final/model.layers.31"
-sae = Sae.load_from_disk(path, device=device).to(t.bfloat16)
-
-W_dec = sae.W_dec
-
-
-# %%
-
-W_dec = W_dec.to(t.float32)
-malicious_vector = malicious_vector.to(t.float32)
-
-# get the most similar decoder directions to the malicious vector
-malicious_norm = t.nn.functional.normalize(malicious_vector.unsqueeze(0), dim=-1)
-W_dec_norm = t.nn.functional.normalize(W_dec, dim=-1)
-
-# compute cosine similarities
-similarities = t.mm(malicious_norm, W_dec_norm.T).squeeze()
-
-# get top k most similar directions
-k = 10
-top_k_similarities, top_k_indices = t.topk(similarities, k)
-
-print(f"\nTop {k} most similar decoder directions:")
-for i, (sim, idx) in enumerate(zip(top_k_similarities.cpu().numpy(), top_k_indices.cpu().numpy())):
-    print(f"{i+1}. Feature {idx}: similarity = {sim:.3f}")
 
 # %%
