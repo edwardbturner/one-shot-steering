@@ -83,8 +83,5 @@ def get_qwen_n_layer_logit_lens(prompt: str, n: int):
 
 
 # %%
-
 get_qwen_n_layer_logit_lens("The Eiffel Tower is in the city of", 4)
-
-
 # %%
